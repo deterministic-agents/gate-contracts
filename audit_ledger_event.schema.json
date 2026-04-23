@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deterministicagents.ai/gate/v1/contracts/audit_ledger_event.schema.json",
+  "title": "GATE Audit Ledger Event",
+  "description": "Hash-chained, tamper-evident ledger event. Every governed action must produce a ledger event committed to an immutable sink. The hash chain must be continuous — any gap or modification is detectable.",
+  "version": "1.0.0",
+  "type": "object",
+
+  "required": [
+    "schema_version", "event_type", "time",
+    "ledger_event_id", "run_id", "tenant_id", "environment",
+    "references", "hash_chain", "signatures", "immutability"
+  ],
+
+  "properties": {
+    "schema_version": { "type": "string", "const": "v1" },
+    "event_type":     { "type": "string", "const": "gate.ledger.event" },
+    "time":           { "type": "string", "format": "date-time" },
+
+    "ledger_event_id": { "type": "string", "format": "uuid" },
+    "run_id":          { "type": "string", "format": "uuid" },
+    "trace_id":        { "type": "string" },
+    "tenant_id":       { "type": "string" },
+    "environment":     { "type": "string", "enum": ["dev", "test", "prod"] },
+    "sequence_number": {
+      "type": "integer",
+      "description": "Monotonically increasing sequence number within a ledger partition. Gaps indicate tampering."
+    },
+
+    "governed_action": {
+      "type": "object",
+      "description": "Summary of the action this ledger event covers.",
+      "properties": {
+        "action_type":   { "type": "string", "enum": ["tool.invoke", "memory.read", "memory.write", "hitl.decision", "breaker.trigger", "agent.lifecycle"] },
+        "tool_name":     { "type": "string" },
+        "agent_instance_id": { "type": "string" }
+      }
+    },
+
+    "references": {
+      "type": "object",
+      "required": ["policy_decision_id"],
+      "description": "Cross-references to correlated evidence artifacts.",
+      "properties": {
+        "trace_id":              { "type": "string" },
+        "policy_decision_id":    { "type": "string", "format": "uuid" },
+        "tool_request_hash":     { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "tool_response_hash":    { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "replay_trace_step_id":  { "type": "string" },
+        "hitl_approval_id":      { "type": "string", "format": "uuid" },
+        "invariant_bundle_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+
+    "hash_chain": {
+      "type": "object",
+      "required": ["prev_event_hash", "event_hash"],
+      "description": "Hash chain linking this event to the previous event. Compute event_hash over the canonical JSON of this event excluding the hash_chain.event_hash field itself.",
+      "properties": {
+        "prev_event_hash": {
+          "type": "string",
+          "pattern": "^(sha256:[a-f0-9]{64}|GENESIS)$",
+          "description": "Hash of previous ledger event. Use 'GENESIS' for first event in a partition."
+        },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA256 of this event in canonical JSON (excluding event_hash field)."
+        }
+      }
+    },
+
+    "signatures": {
+      "type": "object",
+      "required": ["signing_key_id", "signature"],
+      "description": "Signature over the canonical event_hash. Enables non-repudiation and external verification.",
+      "properties": {
+        "signing_key_id": { "type": "string" },
+        "algorithm":      { "type": "string", "enum": ["ES256", "ES384", "RS256", "EdDSA"], "default": "ES256" },
+        "signature":      { "type": "string", "description": "Base64url-encoded signature over event_hash bytes." },
+        "timestamp_authority": {
+          "type": "string",
+          "description": "URI of trusted timestamping authority. Required for high-privilege tier (RFC 3161)."
+        }
+      }
+    },
+
+    "immutability": {
+      "type": "object",
+      "required": ["sink_uri", "retention_class"],
+      "properties": {
+        "sink_uri": {
+          "type": "string",
+          "description": "Immutable storage URI where this event is committed (WORM object store path)."
+        },
+        "retention_class": {
+          "type": "string",
+          "enum": [
+            "sandbox_hot_30d",
+            "prod_hot_365d",
+            "prod_cold_6y_worm",
+            "regulated_cold_7y_plus"
+          ]
+        },
+        "committed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of WORM commit confirmation."
+        }
+      }
+    }
+  }
+}

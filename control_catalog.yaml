@@ -1,0 +1,351 @@
+# GATE Control Catalog — v1.0
+# Machine-readable mapping of C01–C16 controls.
+# Used by: conformance runner, tooling, GRC evidence mapping.
+# Schema: gate/v1/controls/control_catalog
+# Source: Governed Agent Trust Environment (GATE) v1.2.8
+
+gate_version: "1.2.8"
+catalog_version: "1.0"
+
+controls:
+
+  - id: C01
+    title: Workload Identity and Attestation
+    layer: identity_and_integrity
+    boundary: [tool_gateway, memory_gateway, orchestrator]
+    summary: >
+      Every agent instance must have a unique, short-lived workload identity
+      cryptographically bound to its runtime artifacts (image digest, policy bundle,
+      toolset). No shared service accounts. No long-lived credentials.
+    minimum_tier:
+      sandbox: required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - identity_issuance_events
+      - attestation_pass_fail_logs
+      - revocation_events
+    nist_ai_rmf: [GOVERN, MANAGE]
+    iso_42001: [access_control, operational_control]
+    conformance_checks: [Check03]
+
+  - id: C02
+    title: Confidential Execution and Secret Boundary Control
+    layer: identity_and_integrity
+    boundary: [execution_environment, secrets_store]
+    summary: >
+      Data-in-use protection for high-sensitivity workloads. Confidential execution
+      environments (TEE/enclave) for regulated tiers. Secrets gated on attestation.
+      Telemetry hygiene: hashes/pointers only, no plaintext in logs.
+    minimum_tier:
+      sandbox: not_required
+      bounded: conditional
+      high_privilege: required
+    conditional_on: [regulated_data, phi_ephi, mnpi]
+    required_evidence:
+      - attestation_artifacts_linked_to_run_id
+      - secret_access_logs
+      - redaction_validation_results
+    nist_ai_rmf: [GOVERN, MANAGE]
+    iso_42001: [security_privacy_controls]
+    conformance_checks: []
+
+  - id: C03
+    title: Artifact Integrity and Supply Chain Controls
+    layer: identity_and_integrity
+    boundary: [build_pipeline, deploy_gate, runtime]
+    summary: >
+      Signed and hash-pinned container images, policy bundles, prompt bundles,
+      and tool schemas. ABOM as authoritative manifest. Gateway verifies hashes
+      on every run.
+    minimum_tier:
+      sandbox: required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - signature_verification_logs
+      - abom_versions_per_run
+      - sbom_provenance_reports
+    nist_ai_rmf: [GOVERN, MANAGE]
+    iso_42001: [change_management, configuration_control]
+    conformance_checks: [Check13]
+
+  - id: C04
+    title: Agent Lifecycle Governance
+    layer: identity_and_integrity
+    boundary: [platform_inventory, identity_system]
+    summary: >
+      Commission → Attest → Run → Quiesce → Decommission lifecycle with required
+      ABOM and owner at each stage. Ephemeral by default. Decommission must revoke
+      identity and archive evidence.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - authoritative_agent_inventory
+      - decommission_proofs
+      - drift_events
+    nist_ai_rmf: [GOVERN]
+    iso_42001: [asset_management, accountability]
+    conformance_checks: []
+
+  - id: C05
+    title: Tool Gateway with Policy-as-Code Enforcement
+    layer: runtime_enforcement
+    boundary: [tool_gateway]
+    summary: >
+      All tool calls traverse the Tool Gateway. Gateway authenticates identity,
+      validates schemas, evaluates OPA/Rego policy, enforces budgets, applies
+      obligations, signs actions, and emits evidence. No bypass paths.
+    minimum_tier:
+      sandbox: required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - policy_decision_record_per_tool_call
+      - schema_validation_reject_logs
+      - bypass_detection_count
+    nist_ai_rmf: [MANAGE]
+    iso_42001: [operational_control, policy_enforcement]
+    conformance_checks: [Check01, Check02, Check08]
+
+  - id: C06
+    title: Circuit Breakers and Emergency Stop
+    layer: runtime_enforcement
+    boundary: [tool_gateway, orchestrator, network]
+    summary: >
+      Manual break-glass stop and automated circuit breakers. Breakers trigger on
+      error rate spikes, spend velocity, anomalous tool usage, loop detection.
+      Stop must be network/IAM-level, not a polite request to the agent.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - breaker_trigger_events
+      - stop_activation_records
+      - containment_timing_metrics
+    nist_ai_rmf: [MANAGE]
+    iso_42001: [incident_response, operational_resilience]
+    conformance_checks: [Check07]
+
+  - id: C07
+    title: Resource Governance and Economic Safety
+    layer: runtime_enforcement
+    boundary: [tool_gateway, orchestrator]
+    summary: >
+      Token budgets, tool call quotas, cost limits, and adaptive rate limits
+      per agent and per run. Budget exhaustion must halt side effects, not just
+      log a warning.
+    minimum_tier:
+      sandbox: required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - budget_quota_events
+      - throttle_events
+      - spend_anomaly_alerts
+    nist_ai_rmf: [MANAGE]
+    iso_42001: [capacity_management, cost_risk_control]
+    conformance_checks: [Check08]
+
+  - id: C08
+    title: Prompt and Content Injection Defense
+    layer: runtime_enforcement
+    boundary: [ingestion, tool_gateway, memory_gateway]
+    summary: >
+      Phase 1 (required): structural separation of instruction/data channels,
+      schema enforcement on all tool inputs, known pattern blocking at ingestion.
+      Phase 2 (required for bounded+): guard model scanning for indirect injection,
+      perplexity-based anomaly detection, adversarial regression suite in CI.
+    minimum_tier:
+      sandbox: required
+      bounded: required
+      high_privilege: required
+    phase1_controls:
+      - instruction_data_channel_separation
+      - tool_input_schema_enforcement
+      - known_pattern_blocking_at_ingestion
+    phase2_controls:
+      - guard_model_scanning
+      - perplexity_anomaly_detection
+      - adversarial_regression_ci
+    required_evidence:
+      - detection_block_events
+      - schema_reject_logs
+      - adversarial_test_results
+    nist_ai_rmf: [MAP, MANAGE]
+    iso_42001: [risk_treatment, threat_mitigation]
+    conformance_checks: []
+
+  - id: C09
+    title: Execution Constraints and Invariant Enforcement
+    layer: runtime_enforcement
+    boundary: [tool_gateway]
+    summary: >
+      Hardened, versioned invariant rules evaluated after policy but independent of
+      policy context. Invariant failures are not overridable at runtime. Evaluated
+      before tool execution. Invariant bundle versioned separately from policy bundle.
+      Policy decides when an action is allowed; invariants decide whether it is ever permissible.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    invariant_bundle_separate_from_policy: true
+    hitl_override_permitted: false
+    break_glass_override_requires:
+      - signed_break_glass_record
+      - dual_approval
+      - time_bound_exception_id
+    required_evidence:
+      - invariant_check_records
+      - invariant_halt_replay_steps
+      - alert_events_on_halt
+      - invariant_bundle_review_log
+    nist_ai_rmf: [MANAGE]
+    iso_42001: [risk_treatment, operational_safeguards]
+    conformance_checks: []
+
+  - id: C10
+    title: Deterministic Replay
+    layer: observability_and_forensics
+    boundary: [replay_recorder, tool_gateway, memory_gateway]
+    summary: >
+      Every run produces a replay trace capturing model config, bundle hashes,
+      retrieved context hashes, and tool request/response snapshots. A run is
+      replay-deterministic if it reproduces the same tool/memory operations
+      with matching hashes using stored snapshots.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - replay_trace_per_run
+      - snapshot_uris_for_high_impact_tools
+      - replay_success_rate_metric
+    nist_ai_rmf: [MEASURE, MANAGE]
+    iso_42001: [monitoring, audit_support]
+    conformance_checks: [Check06]
+
+  - id: C11
+    title: Verifiable Audit Ledger
+    layer: observability_and_forensics
+    boundary: [audit_ledger_service, immutable_sink]
+    summary: >
+      Hash-chained, signed, tamper-evident ledger committed to WORM storage.
+      Every governed action produces a ledger event. Chain continuity must be
+      verifiable. Integrity reports must be produced on schedule.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - ledger_events_with_hash_chain
+      - integrity_verification_reports
+      - worm_retention_configuration
+    nist_ai_rmf: [GOVERN, MEASURE]
+    iso_42001: [auditability, record_integrity]
+    conformance_checks: [Check05]
+
+  - id: C12
+    title: Signed Actions and Non-Repudiation
+    layer: observability_and_forensics
+    boundary: [tool_gateway, protocol_layer]
+    summary: >
+      High-impact actions digitally signed using the agent's workload identity key.
+      Signature covers the action, input hash, and policy decision ID. Signed proofs
+      committed to the immutable ledger.
+    minimum_tier:
+      sandbox: not_required
+      bounded: conditional
+      high_privilege: required
+    conditional_on: [irreversible_write, financial, infrastructure]
+    required_evidence:
+      - signed_action_proofs
+      - signature_verification_logs
+      - ledger_references
+    nist_ai_rmf: [GOVERN, MEASURE]
+    iso_42001: [accountability, legal_defensibility]
+    conformance_checks: [Check09]
+
+  - id: C13
+    title: Agent-Native Observability and Semantic Tracing
+    layer: observability_and_forensics
+    boundary: [observability_pipeline]
+    summary: >
+      Structured semantic traces capturing agent intent and decision categories
+      (not raw chain-of-thought) correlated to policy decisions, tool invocations,
+      ledger events, and replay traces via run_id/trace_id.
+    minimum_tier:
+      sandbox: required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - semantic_trace_events
+      - correlation_coverage_metric
+      - anomaly_detection_alerts
+    nist_ai_rmf: [MEASURE]
+    iso_42001: [monitoring, measurement]
+    conformance_checks: [Check12]
+
+  - id: C14
+    title: Secure Multi-Agent Protocols
+    layer: orchestration_and_ecosystem
+    boundary: [agent_mesh, protocol_layer]
+    summary: >
+      Signed, versioned, nonce-protected envelopes for all agent-to-agent
+      communication. Prevents replay, spoofing, and "game of telephone" degradation.
+      Recipient must validate signature, schema, nonce freshness.
+    minimum_tier:
+      sandbox: not_required
+      bounded: conditional
+      high_privilege: required
+    conditional_on: [multi_agent_workflows]
+    required_evidence:
+      - envelope_validation_logs
+      - nonce_replay_rejection_events
+      - schema_validation_logs
+    nist_ai_rmf: [GOVERN, MANAGE]
+    iso_42001: [secure_operations, communication_integrity]
+    conformance_checks: [Check15]
+
+  - id: C15
+    title: Distributed Orchestration Control Plane
+    layer: orchestration_and_ecosystem
+    boundary: [orchestrator]
+    summary: >
+      Routing, scheduling, retries/backoff, concurrency limits, backpressure, and
+      safe rollout/rollback for distributed and multi-agent workflows. Orchestrator
+      is the macro governor; gateway budgets are the micro limit.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - workflow_state_events
+      - breaker_trigger_events
+      - rollback_events
+    nist_ai_rmf: [MANAGE]
+    iso_42001: [operational_planning, dependency_containment]
+    conformance_checks: []
+
+  - id: C16
+    title: Continuous Adversarial Validation and High-Assurance Verification
+    layer: orchestration_and_ecosystem
+    boundary: [ci_cd, runtime_gate]
+    summary: >
+      Automated red-teaming in CI, adversarial regression suite, robustness
+      metrics gating deployment. For safety-critical environments: formal
+      verification of invariants using neuro-symbolic or model-checking approaches.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - ci_gate_results
+      - adversarial_test_reports
+      - exploit_trend_metrics
+    nist_ai_rmf: [MEASURE, MANAGE]
+    iso_42001: [continual_improvement, assurance]
+    conformance_checks: []

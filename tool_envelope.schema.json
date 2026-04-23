@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deterministicagents.ai/gate/v1/contracts/tool_envelope.schema.json",
+  "title": "GATE Tool Request/Response Envelope",
+  "description": "Normative schema for GATE Tool Gateway request and response envelopes (v1). All hashes computed over canonical JSON (RFC 8785). See canonical_json.md.",
+  "version": "1.0.0",
+
+  "definitions": {
+
+    "gate_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "SHA-256 hash prefixed with 'sha256:'. Computed over canonical JSON."
+    },
+
+    "spiffe_id": {
+      "type": "string",
+      "pattern": "^spiffe://",
+      "description": "SPIFFE Verifiable Identity Document URI."
+    },
+
+    "tool_category": {
+      "type": "string",
+      "enum": ["read_only", "reversible_write", "irreversible_write", "financial", "infrastructure", "multi_agent"],
+      "description": "GATE tool risk category. Drives minimum control requirements."
+    },
+
+    "risk_tier": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Tool-level risk tier, informed by category and ORM score."
+    },
+
+    "environment": {
+      "type": "string",
+      "enum": ["dev", "test", "prod"],
+      "description": "Deployment environment."
+    },
+
+    "agent_identity": {
+      "type": "object",
+      "required": ["agent_instance_id", "agent_name", "agent_version", "identity"],
+      "properties": {
+        "agent_instance_id": {
+          "$ref": "#/definitions/spiffe_id",
+          "description": "Unique per-run instance ID: SPIFFE URI + run suffix."
+        },
+        "agent_name": { "type": "string" },
+        "agent_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "identity": {
+          "type": "object",
+          "required": ["subject", "attested"],
+          "properties": {
+            "subject": { "$ref": "#/definitions/spiffe_id" },
+            "attested": {
+              "type": "boolean",
+              "description": "True if hardware or software attestation was performed."
+            },
+            "claims": {
+              "type": "object",
+              "properties": {
+                "image_digest": { "$ref": "#/definitions/gate_hash" },
+                "config_hash":  { "$ref": "#/definitions/gate_hash" },
+                "toolset_hash": { "$ref": "#/definitions/gate_hash" },
+                "tee_measurement": {
+                  "type": "string",
+                  "description": "TEE measurement (e.g., SGX MRENCLAVE). Optional."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "bundle_hashes": {
+      "type": "object",
+      "required": ["policy_bundle_hash", "tool_schema_hash"],
+      "properties": {
+        "policy_bundle_hash": { "$ref": "#/definitions/gate_hash" },
+        "prompt_bundle_hash": { "$ref": "#/definitions/gate_hash" },
+        "tool_schema_hash":   { "$ref": "#/definitions/gate_hash" }
+      }
+    }
+  },
+
+  "oneOf": [
+    {
+      "title": "ToolRequestEnvelope",
+      "type": "object",
+      "required": [
+        "schema_version", "event_type", "time",
+        "run_id", "trace_id", "tenant_id", "environment",
+        "agent", "tool", "inputs", "bundles", "hashes", "context"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "const": "v1" },
+        "event_type":     { "type": "string", "const": "gate.tool.request" },
+        "time":           { "type": "string", "format": "date-time" },
+        "run_id":         { "type": "string", "format": "uuid" },
+        "trace_id":       { "type": "string" },
+        "span_id":        { "type": "string" },
+        "tenant_id":      { "type": "string" },
+        "environment":    { "$ref": "#/definitions/environment" },
+        "control_plane_version": { "type": "string" },
+
+        "agent": { "$ref": "#/definitions/agent_identity" },
+
+        "tool": {
+          "type": "object",
+          "required": ["name", "category", "risk_tier"],
+          "properties": {
+            "name":             { "type": "string" },
+            "category":         { "$ref": "#/definitions/tool_category" },
+            "risk_tier":        { "$ref": "#/definitions/risk_tier" },
+            "idempotency_key":  { "type": "string" }
+          }
+        },
+
+        "inputs": {
+          "type": "object",
+          "required": ["content_type"],
+          "properties": {
+            "content_type": { "type": "string" },
+            "payload":      { "description": "Tool input payload. Omit or redact if sensitive; use payload_ref." },
+            "payload_hash": { "$ref": "#/definitions/gate_hash" },
+            "payload_ref": {
+              "type": "object",
+              "properties": {
+                "uri":            { "type": "string" },
+                "encryption":     { "type": "string" },
+                "classification": { "type": "string", "enum": ["public", "internal", "confidential", "regulated"] },
+                "expires_at":     { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        },
+
+        "bundles": { "$ref": "#/definitions/bundle_hashes" },
+
+        "hashes": {
+          "type": "object",
+          "required": ["request_hash"],
+          "properties": {
+            "request_hash": { "$ref": "#/definitions/gate_hash" }
+          }
+        },
+
+        "context": {
+          "type": "object",
+          "properties": {
+            "orm_risk_score": {
+              "type": "number", "minimum": 0, "maximum": 1,
+              "description": "Current ORM risk score at time of request."
+            },
+            "budgets": {
+              "type": "object",
+              "properties": {
+                "tokens_remaining":    { "type": "number" },
+                "tool_calls_remaining":{ "type": "integer" },
+                "cost_usd_remaining":  { "type": "number" }
+              }
+            },
+            "source_labels": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["user_input", "retrieved_doc", "tool_output", "agent_message", "system"] },
+              "description": "Origin labels for inputs reaching this tool call. Used for injection provenance tracking."
+            },
+            "approval": {
+              "type": "object",
+              "properties": {
+                "required":    { "type": "boolean" },
+                "approval_id": { "type": ["string", "null"], "format": "uuid" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    {
+      "title": "ToolResponseEnvelope",
+      "type": "object",
+      "required": [
+        "schema_version", "event_type", "time",
+        "run_id", "trace_id", "tenant_id", "environment",
+        "tool", "outputs", "hashes", "policy", "evidence"
+      ],
+      "properties": {
+        "schema_version": { "type": "string", "const": "v1" },
+        "event_type":     { "type": "string", "const": "gate.tool.response" },
+        "time":           { "type": "string", "format": "date-time" },
+        "run_id":         { "type": "string", "format": "uuid" },
+        "trace_id":       { "type": "string" },
+        "span_id":        { "type": "string" },
+        "tenant_id":      { "type": "string" },
+        "environment":    { "$ref": "#/definitions/environment" },
+
+        "tool": {
+          "type": "object",
+          "required": ["name", "status"],
+          "properties": {
+            "name":        { "type": "string" },
+            "status":      { "type": "string", "enum": ["success", "error", "denied", "timeout"] },
+            "duration_ms": { "type": "integer" },
+            "error_code":  { "type": "string" }
+          }
+        },
+
+        "outputs": {
+          "type": "object",
+          "properties": {
+            "content_type":      { "type": "string" },
+            "payload_redacted":  { "description": "Redacted or summary output. Do not log full payload unless classified public." },
+            "payload_hash":      { "$ref": "#/definitions/gate_hash" },
+            "snapshot_uri":      { "type": "string", "description": "Immutable URI to full response snapshot for replay." }
+          }
+        },
+
+        "hashes": {
+          "type": "object",
+          "required": ["response_hash"],
+          "properties": {
+            "response_hash": { "$ref": "#/definitions/gate_hash" }
+          }
+        },
+
+        "policy": {
+          "type": "object",
+          "required": ["decision_id", "decision", "policy_bundle_hash"],
+          "properties": {
+            "decision_id":        { "type": "string", "format": "uuid" },
+            "decision":           { "type": "string", "enum": ["allow", "deny", "invariant_halt", "hitl_pending"] },
+            "obligations":        { "type": "array", "items": { "type": "string" } },
+            "policy_bundle_hash": { "$ref": "#/definitions/gate_hash" }
+          }
+        },
+
+        "evidence": {
+          "type": "object",
+          "required": ["ledger_event_id"],
+          "properties": {
+            "ledger_event_id":      { "type": "string", "format": "uuid" },
+            "replay_trace_step_id": { "type": "string" }
+          }
+        }
+      }
+    }
+  ]
+}

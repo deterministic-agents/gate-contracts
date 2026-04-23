@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deterministicagents.ai/gate/v1/contracts/replay_trace.schema.json",
+  "title": "GATE Replay Trace",
+  "description": "Captures all non-determinism at the tool/memory boundary sufficient to reproduce a run without live dependencies. A run is replay-deterministic if, given this trace and its snapshots, the system reproduces the same sequence of tool and memory operations with matching request/response hashes.",
+  "version": "1.0.0",
+  "type": "object",
+
+  "required": [
+    "schema_version", "trace_id", "run_id", "tenant_id", "environment",
+    "agent", "model", "bundles", "steps"
+  ],
+
+  "properties": {
+    "schema_version": { "type": "string", "const": "v1" },
+    "trace_id":   { "type": "string" },
+    "run_id":     { "type": "string", "format": "uuid" },
+    "tenant_id":  { "type": "string" },
+    "environment":{ "type": "string", "enum": ["dev", "test", "prod"] },
+    "created_at": { "type": "string", "format": "date-time" },
+
+    "agent": {
+      "type": "object",
+      "required": ["agent_instance_id", "agent_name", "agent_version"],
+      "properties": {
+        "agent_instance_id": { "type": "string" },
+        "agent_name":        { "type": "string" },
+        "agent_version":     { "type": "string" }
+      }
+    },
+
+    "model": {
+      "type": "object",
+      "required": ["model_id", "model_version"],
+      "description": "Model configuration at time of run. Required for replay fidelity.",
+      "properties": {
+        "model_id":      { "type": "string", "description": "Provider and model identifier (e.g., 'openai/gpt-4o')." },
+        "model_version": { "type": "string", "description": "Pinned model version string." },
+        "temperature":   { "type": "number", "minimum": 0, "maximum": 2 },
+        "seed":          { "type": ["integer", "null"], "description": "RNG seed if set. Null if not pinned." },
+        "decoding":      { "type": "string", "enum": ["greedy", "sampled", "beam"], "default": "sampled" },
+        "max_tokens":    { "type": "integer" }
+      }
+    },
+
+    "bundles": {
+      "type": "object",
+      "required": ["policy_bundle_hash", "tool_schema_hash"],
+      "description": "Bundle hashes pinned at run time. Replay harness must load matching bundle versions.",
+      "properties": {
+        "prompt_bundle_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "policy_bundle_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "tool_schema_hash":   { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+
+    "steps": {
+      "type": "array",
+      "description": "Ordered sequence of governed boundary operations. Each step is independently verifiable.",
+      "items": {
+        "type": "object",
+        "required": ["step_index", "step_type"],
+        "properties": {
+
+          "step_index": { "type": "integer", "minimum": 1 },
+
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "retrieve_context",
+              "tool_call",
+              "tool_deny",
+              "invariant_halt",
+              "memory_read",
+              "memory_write",
+              "hitl_gate",
+              "breaker_trigger",
+              "final_output"
+            ]
+          },
+
+          "tool_name":       { "type": "string" },
+          "request_hash":    { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "response_hash":   { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "response_snapshot_uri": {
+            "type": "string",
+            "description": "Immutable URI to the full response snapshot. Required for high-impact tools."
+          },
+          "policy_decision_id": { "type": "string", "format": "uuid" },
+          "ledger_event_id":    { "type": "string", "format": "uuid" },
+          "invariant_rule_id":  {
+            "type": "string",
+            "description": "Present for invariant_halt steps. References the specific rule that halted execution."
+          },
+
+          "retrieved_context_hashes": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "description": "Hashes of retrieved documents for retrieve_context steps."
+          },
+          "provenance_refs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Provenance URIs for retrieved documents."
+          },
+
+          "output_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "description": "Hash of final agent output for final_output step."
+          },
+
+          "hitl_approval_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For hitl_gate steps: approval record ID. Null if pending or denied."
+          },
+
+          "timestamp": { "type": "string", "format": "date-time" },
+          "duration_ms": { "type": "integer" }
+        }
+      }
+    },
+
+    "replay_metadata": {
+      "type": "object",
+      "description": "Metadata used by the replay harness.",
+      "properties": {
+        "replay_mode": {
+          "type": "string",
+          "enum": ["mock_all", "mock_external", "live"],
+          "default": "mock_all",
+          "description": "mock_all: all tool responses served from snapshots. mock_external: only external APIs mocked. live: live dependencies (for validation only, not forensic replay)."
+        },
+        "harness_version": { "type": "string" },
+        "completed_at":    { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

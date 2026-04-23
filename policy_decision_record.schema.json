@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deterministicagents.ai/gate/v1/contracts/policy_decision_record.schema.json",
+  "title": "GATE Policy Decision Record",
+  "description": "The must-have record that makes every tool execution defensible. Emitted by the Tool Gateway policy engine for every tool attempt (allow, deny, or invariant_halt). All hashes over canonical JSON (RFC 8785).",
+  "version": "1.0.0",
+  "type": "object",
+
+  "required": [
+    "schema_version", "event_type", "time",
+    "decision_id", "run_id", "trace_id", "tenant_id", "environment",
+    "subject", "action", "inputs", "bundles", "result"
+  ],
+
+  "properties": {
+    "schema_version": { "type": "string", "const": "v1" },
+    "event_type":     { "type": "string", "const": "gate.policy.decision" },
+    "time":           { "type": "string", "format": "date-time" },
+
+    "decision_id": {
+      "type": "string", "format": "uuid",
+      "description": "Globally unique ID for this decision. Referenced by LedgerEvent and ToolResponseEnvelope."
+    },
+    "run_id":    { "type": "string", "format": "uuid" },
+    "trace_id":  { "type": "string" },
+    "tenant_id": { "type": "string" },
+    "environment": { "type": "string", "enum": ["dev", "test", "prod"] },
+    "control_plane_version": { "type": "string" },
+
+    "subject": {
+      "type": "object",
+      "required": ["agent_instance_id", "subject_id", "attested"],
+      "properties": {
+        "agent_instance_id": { "type": "string" },
+        "subject_id":        { "type": "string" },
+        "attested":          { "type": "boolean" },
+        "attestation_ref":   { "type": "string", "description": "Pointer to attestation artifact." }
+      }
+    },
+
+    "action": {
+      "type": "object",
+      "required": ["type", "tool_name", "tool_category"],
+      "properties": {
+        "type":          { "type": "string", "enum": ["tool.invoke", "memory.read", "memory.write"] },
+        "tool_name":     { "type": "string" },
+        "tool_category": { "type": "string", "enum": ["read_only", "reversible_write", "irreversible_write", "financial", "infrastructure", "multi_agent"] },
+        "risk_tier":     { "type": "string", "enum": ["low", "medium", "high", "critical"] }
+      }
+    },
+
+    "inputs": {
+      "type": "object",
+      "required": ["request_hash"],
+      "properties": {
+        "request_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "context_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Hash of ORM score, budget state, and source labels at decision time."
+        },
+        "orm_risk_score": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+
+    "bundles": {
+      "type": "object",
+      "required": ["policy_bundle_hash", "tool_schema_hash"],
+      "properties": {
+        "policy_bundle_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "tool_schema_hash":   { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+
+    "invariant_check": {
+      "type": "object",
+      "description": "Present when an invariant check was performed (C09). Required for invariant_halt decisions.",
+      "properties": {
+        "invariant_bundle_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "rules_evaluated": { "type": "integer" },
+        "rules_failed": { "type": "integer" },
+        "failed_rule_ids": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "result": {
+      "type": "object",
+      "required": ["decision", "reason_codes", "obligations"],
+      "properties": {
+
+        "decision": {
+          "type": "string",
+          "enum": ["allow", "deny", "invariant_halt"],
+          "description": "allow: proceed. deny: policy blocked. invariant_halt: non-overridable invariant violated."
+        },
+
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ALLOWLIST_MATCH",
+              "BUDGET_OK",
+              "DENYLIST_MATCH",
+              "BUDGET_EXCEEDED",
+              "IDENTITY_INVALID",
+              "ATTESTATION_FAILED",
+              "SCHEMA_INVALID",
+              "ORM_THRESHOLD_EXCEEDED",
+              "INVARIANT_VIOLATED",
+              "HITL_REQUIRED",
+              "TIME_WINDOW_VIOLATION",
+              "DESTINATION_NOT_ALLOWLISTED",
+              "RUN_LIMIT_EXCEEDED",
+              "UNKNOWN"
+            ]
+          }
+        },
+
+        "obligations": {
+          "type": "array",
+          "description": "Obligations that MUST be enforced by the caller. Not suggestions.",
+          "items": {
+            "type": "object",
+            "required": ["type", "required"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "audit_log",
+                  "sign_action",
+                  "hitl_approval",
+                  "redact_fields",
+                  "verify_destination",
+                  "require_idempotency_key",
+                  "snapshot_response",
+                  "alert_operator"
+                ]
+              },
+              "required": {
+                "type": "boolean",
+                "description": "If true, caller MUST enforce this obligation before proceeding. If false, recommended."
+              },
+              "params": {
+                "type": "object",
+                "description": "Obligation-specific parameters (e.g., fields to redact, approver role)."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

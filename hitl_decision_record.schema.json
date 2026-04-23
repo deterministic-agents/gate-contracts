@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deterministicagents.ai/gate/v1/contracts/hitl_decision_record.schema.json",
+  "title": "GATE HITL Decision Record",
+  "description": "Signed approval record for human-in-the-loop gates. Every HITL decision MUST be signed, linked to the originating request, and committed to the immutable ledger.",
+  "version": "1.0.0",
+  "type": "object",
+
+  "required": [
+    "schema_version", "approval_id", "time",
+    "run_id", "trace_id", "tenant_id", "environment",
+    "request", "context", "decision", "evidence"
+  ],
+
+  "properties": {
+    "schema_version": { "type": "string", "const": "v1" },
+    "approval_id":    { "type": "string", "format": "uuid" },
+    "time":           { "type": "string", "format": "date-time" },
+    "run_id":         { "type": "string", "format": "uuid" },
+    "trace_id":       { "type": "string" },
+    "tenant_id":      { "type": "string" },
+    "environment":    { "type": "string", "enum": ["dev", "test", "prod"] },
+
+    "request": {
+      "type": "object",
+      "required": ["tool_name", "request_hash"],
+      "properties": {
+        "tool_name":    { "type": "string" },
+        "request_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "summary":      { "type": "string", "description": "Human-readable summary of what the agent is requesting approval for." },
+        "tool_category":{ "type": "string" },
+        "risk_tier":    { "type": "string" }
+      }
+    },
+
+    "context": {
+      "type": "object",
+      "required": ["orm_risk_score", "policy_decision_id"],
+      "properties": {
+        "orm_risk_score":      { "type": "number", "minimum": 0, "maximum": 1 },
+        "policy_decision_id":  { "type": "string", "format": "uuid" },
+        "ledger_head_ref":     { "type": "string" },
+        "run_tool_call_count": { "type": "integer" },
+        "run_cost_usd_so_far": { "type": "number" }
+      }
+    },
+
+    "decision": {
+      "type": "object",
+      "required": ["approver_id", "action", "justification"],
+      "properties": {
+        "approver_id":  { "type": "string", "description": "Authenticated identity of the approver (role + user ID)." },
+        "approver_role":{ "type": "string" },
+        "action": {
+          "type": "string",
+          "enum": ["approve", "deny", "modify", "request_more_info"],
+          "description": "approve: proceed. deny: halt. modify: proceed with conditions. request_more_info: escalate."
+        },
+        "justification": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Free-text justification. Required for all decisions including approvals."
+        },
+        "conditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Conditions attached to an approve or modify decision."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Approval expiry. Agent must execute within this window or request fresh approval."
+        }
+      }
+    },
+
+    "evidence": {
+      "type": "object",
+      "required": ["signature", "ledger_event_id"],
+      "properties": {
+        "signing_key_id":  { "type": "string" },
+        "signature":       { "type": "string", "description": "Base64url signature over canonical JSON of decision object." },
+        "ledger_event_id": { "type": "string", "format": "uuid" },
+        "dual_approver_id":{ "type": "string", "description": "Required for break-glass emergency overrides: second approver identity." }
+      }
+    }
+  }
+}

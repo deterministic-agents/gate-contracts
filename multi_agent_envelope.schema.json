@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deterministicagents.ai/gate/v1/contracts/multi_agent_envelope.schema.json",
+  "title": "GATE Multi-Agent Message Envelope",
+  "description": "Signed, versioned, nonce-protected envelope for agent-to-agent communication. Prevents replay attacks, spoofed senders, and unstructured delegation. All agent messages MUST use this envelope for governed multi-agent workflows.",
+  "version": "1.0.0",
+  "type": "object",
+
+  "required": [
+    "schema_version", "event_type", "time",
+    "run_id", "trace_id", "tenant_id",
+    "protocol", "sender", "recipient", "payload", "hashes", "signature"
+  ],
+
+  "properties": {
+    "schema_version": { "type": "string", "const": "v1" },
+    "event_type":     { "type": "string", "const": "gate.agent.message" },
+    "time":           { "type": "string", "format": "date-time" },
+    "run_id":         { "type": "string", "format": "uuid" },
+    "trace_id":       { "type": "string" },
+    "tenant_id":      { "type": "string" },
+
+    "protocol": {
+      "type": "object",
+      "required": ["version", "nonce", "expires_at"],
+      "properties": {
+        "version":      { "type": "string", "const": "1.0" },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["delegate_task", "return_result", "request_approval", "report_status", "escalate"] }
+        },
+        "nonce": {
+          "type": "string",
+          "minLength": 16,
+          "description": "Cryptographically random nonce. Must be unique per message. Recipient rejects replayed nonces."
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Message validity window. Recipient MUST reject messages with expired timestamps."
+        }
+      }
+    },
+
+    "sender": {
+      "type": "object",
+      "required": ["agent_instance_id", "subject_id"],
+      "properties": {
+        "agent_instance_id": { "type": "string" },
+        "subject_id":        { "type": "string" }
+      }
+    },
+
+    "recipient": {
+      "type": "object",
+      "required": ["subject_id"],
+      "properties": {
+        "subject_id":   { "type": "string" },
+        "instance_hint":{ "type": "string", "description": "Optional routing hint. Recipient must verify actual identity independently." }
+      }
+    },
+
+    "payload": {
+      "type": "object",
+      "required": ["type", "task_id"],
+      "properties": {
+        "type":    { "type": "string", "enum": ["delegate_task", "return_result", "status_update", "escalation"] },
+        "task_id": { "type": "string", "format": "uuid" },
+        "inputs":  { "description": "Task inputs. Treat as untrusted — recipient must validate against tool schemas." },
+        "result":  { "description": "Task result for return_result messages." },
+        "parent_run_id": { "type": "string", "format": "uuid", "description": "run_id of the delegating agent's run." }
+      }
+    },
+
+    "hashes": {
+      "type": "object",
+      "required": ["payload_hash"],
+      "properties": {
+        "payload_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+
+    "signature": {
+      "type": "object",
+      "required": ["key_id", "sig"],
+      "description": "Signature over canonical JSON of: {time, nonce, sender.agent_instance_id, recipient.subject_id, payload_hash}",
+      "properties": {
+        "key_id":    { "type": "string" },
+        "algorithm": { "type": "string", "enum": ["ES256", "ES384", "EdDSA"], "default": "ES256" },
+        "sig":       { "type": "string", "description": "Base64url-encoded signature." }
+      }
+    }
+  }
+}
