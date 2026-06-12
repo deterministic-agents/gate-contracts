@@ -55,7 +55,7 @@
     "hash_chain": {
       "type": "object",
       "required": ["prev_event_hash", "event_hash"],
-      "description": "Hash chain linking this event to the previous event. Compute event_hash over the canonical JSON of this event excluding the hash_chain.event_hash field itself.",
+      "description": "Hash chain linking this event to the previous event. Compute event_hash over the canonical JSON of this event excluding the hash_chain.event_hash field itself and the signatures block (the signature is computed over event_hash, so including it would be circular; producers seal the hash first, then sign).",
       "properties": {
         "prev_event_hash": {
           "type": "string",
@@ -65,7 +65,7 @@
         "event_hash": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$",
-          "description": "SHA256 of this event in canonical JSON (excluding event_hash field)."
+          "description": "SHA256 of this event in canonical JSON (excluding the event_hash field and the signatures block)."
         }
       }
     },
