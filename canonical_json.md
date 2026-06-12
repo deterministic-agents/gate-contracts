@@ -145,7 +145,7 @@ func GateHash(v interface{}) (string, error) {
 |---|---|
 | `request_hash` | Canonical ToolRequestEnvelope inputs object |
 | `response_hash` | Canonical ToolResponseEnvelope outputs object |
-| `event_hash` | Canonical LedgerEvent (excluding `hash_chain` field itself) |
+| `event_hash` | Canonical LedgerEvent (excluding `hash_chain.event_hash` and the `signatures` block — the signature covers `event_hash`, so it cannot be hashed without circularity) |
 | `prev_event_hash` | Hash of previous canonical LedgerEvent |
 | `payload_hash` | Canonical tool input/output payload |
 | `policy_bundle_hash` | SHA256 of the policy bundle archive (zip bytes, not JSON) |
