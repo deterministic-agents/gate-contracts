@@ -1,11 +1,11 @@
-# GATE Control Catalog — v1.0
-# Machine-readable mapping of C01–C16 controls.
+# GATE Control Catalog - v1.1
+# Machine-readable mapping of C01-C19 controls.
 # Used by: conformance runner, tooling, GRC evidence mapping.
 # Schema: gate/v1/controls/control_catalog
-# Source: Governed Agent Trust Environment (GATE) v1.2.8
+# Source: Governed Agent Trust Environment (GATE) v1.3
 
-gate_version: "1.2.8"
-catalog_version: "1.0"
+gate_version: "1.3"
+catalog_version: "1.1"
 
 controls:
 
@@ -349,3 +349,91 @@ controls:
     nist_ai_rmf: [MEASURE, MANAGE]
     iso_42001: [continual_improvement, assurance]
     conformance_checks: []
+
+  # ----------------------------------------------------------------------
+  # v1.3 additions
+  # ----------------------------------------------------------------------
+
+  - id: C17
+    title: Agent Discovery and Shadow AI Detection
+    layer: identity_and_integrity
+    boundary: [network_detector, asset_inventory, identity_classifier, tool_gateway_ingress]
+    summary: >
+      Continuous discovery of agent-like workloads not present in the C04
+      inventory. Three detection mechanisms (network observation, cloud asset
+      inventory, identity classifier) feed a candidate store. Each candidate
+      resolves to enrol (C04 Commission), terminate (IdP revoke + Tool Gateway
+      deny + network egress block), or exception (TTL-bound, signed approval).
+      Closes the v1.2.8 assumption that the C01-C16 control plane has anything
+      to say about agents it has never seen.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - agent_discovered_events
+      - agent_remediation_outcome_events
+      - classifier_bundle_signature_log
+      - reconciliation_report_c04_inventory_vs_tool_stream
+      - termination_drill_record
+    nist_ai_rmf: [GOVERN, MAP]
+    iso_42001: [ai_system_inventory, ai_system_identification, operational_planning]
+    conformance_checks: [Check16]
+    introduced_in: "1.3"
+
+  - id: C18
+    title: Data Quality Gates
+    layer: runtime_enforcement
+    boundary: [memory_gateway]
+    summary: >
+      Retrieval-time freshness, confidence, and provenance gates inside the
+      Memory Gateway. Per-content-class thresholds and per-tier action matrix
+      (pass / flag / downgrade / deny) configured in a signed quality bundle.
+      Closes the gap that allowed an agent to pass every other GATE check
+      while operating on stale, low-confidence, or unverifiable retrieved
+      content. C18 runs before C08 on the retrieval path.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - quality_decision_events
+      - quality_bundle_signature_log
+      - content_class_taxonomy
+      - memory_gateway_write_rejection_log
+      - provenance_verification_report
+    nist_ai_rmf: [MEASURE, MANAGE]
+    iso_42001: [data_quality, data_provenance]
+    conformance_checks: [Check17]
+    introduced_in: "1.3"
+    interacts_with: [C03, C08, C10]
+
+  - id: C19
+    title: Model Behaviour Monitoring
+    layer: observability_and_forensics
+    boundary: [assurance_plane]
+    summary: >
+      Continuous statistical drift detection. A signed baseline tied to the
+      current ABOM, a drift detector that runs rolling-window statistical
+      tests (KS for continuous, chi-square for categorical) against the
+      baseline, and a response router that emits configured actions per tier
+      and per dimension. Distinct from C16 adversarial validation: C19 detects
+      gradual distribution drift, C16 detects attacks. Both are required at
+      high-privilege tier; their ledger event types are separate
+      (gate.assurance.drift_decision vs gate.assurance.adversarial_outcome)
+      and runbooks for them must not be merged.
+    minimum_tier:
+      sandbox: not_required
+      bounded: required
+      high_privilege: required
+    required_evidence:
+      - signed_baseline_artifact
+      - drift_decision_events
+      - response_action_events
+      - rebaselining_log_with_approver
+    nist_ai_rmf: [MEASURE, MANAGE]
+    iso_42001: [performance_monitoring, ai_system_operations, monitoring_evaluation]
+    conformance_checks: [Check18, Check19]
+    introduced_in: "1.3"
+    depends_on: [C13]
+    distinct_from: [C16]
