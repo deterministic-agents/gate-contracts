@@ -78,7 +78,16 @@ jsonschema.validate(event, schema)
 
 ---
 
-## v1.1.0 (2026-06-16)
+## v1.1.1 (2026-06-16)
+
+First gate-contracts Release Object since v1.0.0. The v1.1.0 tag
+carried the v1.3-compatible schema additions onto main but no Release
+Object was ever cut, so the content was not downloadable as a release
+artifact. v1.1.1 ships that content together with a README cleanup
+that removed two lines of staging instruction text accidentally
+committed in the v1.1.0 merge. Schema files at v1.1.1 are byte-
+identical to v1.1.0; any downstream that pinned schema SHA256s
+continues to work without changes.
 
 Adds the six v1.3 control plane contracts and five new schemas for resources that previously lived implicitly inside other envelopes. Existing schemas are unchanged in shape; v1.3 fields are additive only.
 
