@@ -1,6 +1,6 @@
 # gate-contracts
 
-**GATE JSON Schema contracts - v1.1.0**
+**GATE JSON Schema contracts - v1.1.1**
 
 Normative JSON Schema (Draft 2020-12) definitions for all GATE control plane
 contracts. This is the canonical dependency for GATE implementations -
@@ -9,7 +9,7 @@ all reference these schemas.
 
 Framework: https://deterministicagents.ai  
 Organisation: https://github.com/deterministic-agents  
-Documentation: CC BY 4.0 — Andrew Stevens · Code: MIT
+Documentation: CC BY 4.0 - Andrew Stevens · Code: MIT
 
 ---
 
@@ -77,10 +77,6 @@ jsonschema.validate(event, schema)
 ```
 
 ---
-
-# gate-contracts v1.1.0 - additions to README
-
-Insertion point: under the existing version history block in the repo README, prepend a v1.1.0 section.
 
 ## v1.1.0 (2026-06-16)
 
